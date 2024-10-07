@@ -35,29 +35,69 @@ def parse_top_m3u(data: bytes) -> list[str]:
     ]
 
 
+def parse_inner_m3u(data: bytes, base_url: str) -> bytes:
+    paths = re.findall(
+        rb'\s*(\S+\.webm)',
+        data,
+    )
+    return b'\n'.join(
+        b'file %s/%s' % (
+            base_url.encode(),
+            path,
+        )
+        for path in paths
+    )
+
+
+def get_concats(prefix: str, urls: list[str]) -> list[str]:
+    paths = []
+
+    for url in urls:
+        path = f'{prefix}-{url.rsplit('-', 1)[-1]}.concat'
+        base_url = url.rsplit('/', 1)[0]
+        paths.append(path)
+
+        with open(path, 'wb') as f:
+            f.write(parse_inner_m3u(urllib3.request('GET', url).data, base_url))
+    return paths
+
+
 def download(hash: str, location: str):
+    assert os.path.isdir(location)
+
     url = get_url(hash)
     data = urllib3.request('GET', url).data
-    urls = parse_top_m3u(data)
-    if os.path.isdir(location):
-        location = os.path.join(location, f'{url[-32:]}.mp4')
+
+    path_prefix = os.path.join(location, url[-32:])
+    m3u8_urls = parse_top_m3u(data)
+    concat_paths = get_concats(path_prefix, m3u8_urls)
+
     subprocess.Popen([
         'ffmpeg',
         *(
             arg
-            for url in urls
-            for arg in ['-i', url]
+            for url in concat_paths
+            for arg in [
+                '-safe', '0',
+                '-f', 'concat',
+                '-protocol_whitelist',
+                'https,tls,tcp,file,data',
+                '-i', url,
+            ]
         ),
         *(
             arg
-            for i in range(len(urls))
-            for arg in ['-map', f'{i:d}']
+            for i in range(len(m3u8_urls))
+            for arg in [
+                '-map', f'{i:d}',
+            ]
         ),
         '-c', 'copy',
-        location,
+        '-reset_timestamps', '1',
+        f'{path_prefix}.mp4',
         '-y',
     ]).communicate()
-    print(urls)
+    print(m3u8_urls)
 
 
 if __name__ == '__main__':
@@ -66,6 +106,6 @@ if __name__ == '__main__':
         'hash', type=str, default='https://c1.rbxcdn.com/8bbd730825219577bac81de41e418c08', nargs='?',
     )
     parser.add_argument(
-        'location', type=str, default='.', nargs='?',
+        'location', type=str, default='./videos/', nargs='?',
     )
     download(**parser.parse_args().__dict__)
