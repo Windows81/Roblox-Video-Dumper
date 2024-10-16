@@ -94,6 +94,7 @@ def download(hash: str, location: str):
         ),
         '-c', 'copy',
         '-reset_timestamps', '1',
+        '-fflags', '+genpts',
         f'{path_prefix}.mp4',
         '-y',
     ]).communicate()
