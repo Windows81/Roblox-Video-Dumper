@@ -36,7 +36,7 @@ def parse_top_m3u(data: bytes) -> list[str]:
 
 
 def parse_inner_m3u(data: bytes, base_url: str) -> bytes:
-    paths = re.findall(
+    paths: list[bytes] = re.findall(
         rb'\s*(\S+\.webm)',
         data,
     )
@@ -50,7 +50,7 @@ def parse_inner_m3u(data: bytes, base_url: str) -> bytes:
 
 
 def get_concats(prefix: str, urls: list[str]) -> list[str]:
-    paths = []
+    paths: list[str] = []
 
     for url in urls:
         path = f'{prefix}-{url.rsplit('-', 1)[-1]}.concat'
@@ -58,21 +58,21 @@ def get_concats(prefix: str, urls: list[str]) -> list[str]:
         paths.append(path)
 
         with open(path, 'wb') as f:
-            f.write(parse_inner_m3u(urllib3.request('GET', url).data, base_url))
+            _ = f.write(
+                parse_inner_m3u(
+                    urllib3.request('GET', url).data,
+                    base_url,
+                )
+            )
     return paths
 
 
-def download(hash: str, location: str):
+def download(hash: str, m3u8_urls: list[str], location: str):
     assert os.path.isdir(location)
-
-    url = get_url(hash)
-    data = urllib3.request('GET', url).data
-
-    path_prefix = os.path.join(location, url[-32:])
-    m3u8_urls = parse_top_m3u(data)
+    path_prefix = os.path.join(location, hash)
     concat_paths = get_concats(path_prefix, m3u8_urls)
 
-    subprocess.Popen([
+    _ = subprocess.Popen([
         'ffmpeg',
         *(
             arg
@@ -98,15 +98,17 @@ def download(hash: str, location: str):
         f'{path_prefix}.mp4',
         '-y',
     ]).communicate()
-    print(m3u8_urls)
 
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        'hash', type=str, default='https://c1.rbxcdn.com/8bbd730825219577bac81de41e418c08', nargs='?',
+        '--location', type=str, default='./videos/', nargs='?',
     )
     parser.add_argument(
-        'location', type=str, default='./videos/', nargs='?',
+        'hash', type=str,
+    )
+    parser.add_argument(
+        'm3u8_urls', type=str, nargs='+',
     )
     download(**parser.parse_args().__dict__)
