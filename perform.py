@@ -1,4 +1,4 @@
-from . import save
+import save
 import glob
 import os
 import re

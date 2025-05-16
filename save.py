@@ -1,6 +1,6 @@
+import urllib.request
 import subprocess
 import argparse
-import urllib3
 import os.path
 import re
 
@@ -25,7 +25,7 @@ def parse_top_m3u(data: bytes) -> list[str]:
     )
     assert match is not None
     base_uri = match[1]
-    urls = re.findall(
+    urls: list[bytes] = re.findall(
         rb'\{\$RBX-BASE-URI\}(/[^\s]+)',
         data,
     )
@@ -57,13 +57,9 @@ def get_concats(prefix: str, urls: list[str]) -> list[str]:
         base_url = url.rsplit('/', 1)[0]
         paths.append(path)
 
-        with open(path, 'wb') as f:
-            _ = f.write(
-                parse_inner_m3u(
-                    urllib3.request('GET', url).data,
-                    base_url,
-                )
-            )
+        with urllib.request.urlopen(url) as res, open(path, 'wb') as f:
+            data = parse_inner_m3u(res.read(), base_url)
+            _ = f.write(data)
     return paths
 
 
