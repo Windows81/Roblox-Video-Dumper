@@ -1,20 +1,11 @@
+from io import BufferedReader
 import save
 import glob
 import os
 import re
 
-hls_base: bytes = b''
-rbxcdn_hash: bytes = b''
-m3u8_urls: list[bytes] = []
 
-
-def call_process():
-    global hls_base, rbxcdn_hash, m3u8_urls
-    if rbxcdn_hash == b'':
-        return
-    if len(m3u8_urls) == 0:
-        return
-
+def call_process(rbxcdn_hash: bytes, m3u8_urls: list[bytes]):
     save.download(
         rbxcdn_hash.decode('utf-8'),
         [
@@ -23,39 +14,56 @@ def call_process():
         ],
         './videos/',
     )
-    del rbxcdn_hash
-    m3u8_urls.clear()
 
 
-def process_line(line: bytes):
-    global hls_base, rbxcdn_hash, m3u8_urls
+def process_file(file: BufferedReader):
+    hls_base: bytes
+    rbxcdn_hash: bytes = b''
+    m3u8_urls: list[bytes] = []
 
-    match = re.search(br'[0-9]\.rbxcdn\.com/([0-9a-f]+)', line)
-    if match:
-        call_process()
-        rbxcdn_hash = match.group(1)
+    rbxcdn_match = re.search(
+        br'[0-9]\.rbxcdn\.com/([0-9a-f]+)',
+        file.readline(),
+    )
+    if not rbxcdn_match:
+        return
+    rbxcdn_hash = rbxcdn_match.group(1)
+
+    for i, line in enumerate(file):
+        # b'NAME="RBX-BASE-URI"' is usually matched at i == 25.
+        # There is no way that the M3U data is so many lines down.
+        # Terminate early.
+        if i > 40:
+            return
+        if b'NAME="RBX-BASE-URI"' not in line:
+            continue
+        hls_match = re.search(
+            br'(https://hls-segments.rbxcdn.com/[0-9a-f]+)',
+            line,
+        )
+        assert hls_match
+        hls_base = hls_match.group(1)
+        break
+    else:
         return
 
-    if b'NAME="RBX-BASE-URI"' in line:
-        match = re.search(
-            b'(https://hls-segments.rbxcdn.com/[0-9a-f]+)', line)
-        assert match
-        hls_base = match.group(1)
-        return
-
-    if re.search(b'RBX-BASE-URI}/', line):
-        if rbxcdn_hash and hls_base:
+    for line in file:
+        if b'RBX-BASE-URI}/' in line:
             modified_line = re.sub(b'^.+RBX-BASE-URI}', hls_base, line)
             m3u8_urls.append(modified_line.strip())
+
+    return rbxcdn_hash, m3u8_urls
 
 
 def process_files(directory_path: str):
     for file_path in glob.glob(directory_path):
         with open(file_path, 'rb') as file:
-            for line in file:
-                process_line(line)
+            res = process_file(file)
+            if res:
+                yield res
 
 
-directory_path = os.path.expandvars("$LOCALAPPDATA/Temp/Roblox/http/*")
-process_files(directory_path)
-call_process()
+if __name__ == "__main__":
+    directory_path = os.path.expandvars("$LOCALAPPDATA/Temp/Roblox/http/*")
+    for res in process_files(directory_path):
+        call_process(*res)
