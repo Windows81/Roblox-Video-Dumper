@@ -63,9 +63,9 @@ def get_concats(prefix: str, urls: list[str]) -> list[str]:
     return paths
 
 
-def download(hash: str, m3u8_urls: list[str], location: str):
-    assert os.path.isdir(location)
-    path_prefix = os.path.join(location, hash)
+def download_and_combine(hash: str, m3u8_urls: list[str], dir_location: str):
+    assert os.path.isdir(dir_location)
+    path_prefix = os.path.join(dir_location, hash)
     concat_paths = get_concats(path_prefix, m3u8_urls)
 
     _ = subprocess.Popen([
@@ -107,4 +107,4 @@ if __name__ == '__main__':
     parser.add_argument(
         'm3u8_urls', type=str, nargs='+',
     )
-    download(**parser.parse_args().__dict__)
+    download_and_combine(**parser.parse_args().__dict__)

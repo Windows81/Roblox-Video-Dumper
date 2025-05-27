@@ -6,7 +6,7 @@ import re
 
 
 def call_process(rbxcdn_hash: bytes, m3u8_urls: list[bytes]):
-    save.download(
+    save.download_and_combine(
         rbxcdn_hash.decode('utf-8'),
         [
             u.decode('utf-8')
